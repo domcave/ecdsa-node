@@ -1,7 +1,10 @@
 import { useState } from "react";
 import server from "./server";
+import { secp256k1 as secp } from "ethereum-cryptography/secp256k1"; 
+import { keccak256 } from "ethereum-cryptography/keccak";
+import { utf8ToBytes, hexToBytes, toHex } from "ethereum-cryptography/utils";
 
-function Transfer({ address, setBalance }) {
+function Transfer({ address, setBalance, privateKey }) {
   const [sendAmount, setSendAmount] = useState("");
   const [recipient, setRecipient] = useState("");
 
@@ -10,16 +13,27 @@ function Transfer({ address, setBalance }) {
   async function transfer(evt) {
     evt.preventDefault();
 
+    const amount = parseInt(sendAmount);
+    const msg = `${address} sent ${amount} to ${recipient}`;
+    const msgHash = toHex(keccak256(utf8ToBytes(msg)));
+    const signature = await secp.sign(msgHash, hexToBytes(privateKey.slice(2)));
+
     try {
+      console.log("before try");
       const {
         data: { balance },
       } = await server.post(`send`, {
         sender: address,
-        amount: parseInt(sendAmount),
+        hexSignature: signature.toCompactHex(),
+        amount: amount,
+        msg: msg,
         recipient,
+        recoveryNum: signature.recovery,
       });
+      console.log("after try");
       setBalance(balance);
     } catch (ex) {
+      console.log(ex)
       alert(ex.response.data.message);
     }
   }
@@ -46,7 +60,7 @@ function Transfer({ address, setBalance }) {
         ></input>
       </label>
 
-      <input type="submit" className="button" value="Transfer" />
+      <input type="submit" className="button" value="Transfer Securely" />
     </form>
   );
 }
